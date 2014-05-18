@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"net/http"
 	"sync"
+	"sync/atomic"
 )
 
 // A Spy wraps an http.ResponseWriter and can report the status code written
@@ -45,22 +46,13 @@ func NewWriteSpy(w http.ResponseWriter) WriteSpy {
 }
 
 type simpleSpy struct {
-	w       http.ResponseWriter
-	mut     sync.Mutex
-	written bool
-	code    int
+	w    http.ResponseWriter
+	code int32
 }
 
 func (s *simpleSpy) Write(p []byte) (int, error) {
-	var err error
-	n := len(p)
-	s.mut.Lock()
-	s.written = true
-	if s.w != nil {
-		n, err = s.w.Write(p)
-	}
-	s.mut.Unlock()
-	return n, err
+	atomic.CompareAndSwapInt32(&s.code, 0, 200)
+	return s.w.Write(p)
 }
 
 func (s *simpleSpy) Header() http.Header {
@@ -68,20 +60,13 @@ func (s *simpleSpy) Header() http.Header {
 }
 
 func (s *simpleSpy) WriteHeader(code int) {
-	s.mut.Lock()
-	if !s.written {
-		s.written = true
-		s.code = code
-	}
-	s.WriteHeader(code)
-	s.mut.Unlock()
+	// TODO figure out what net/http does when WriteHeader is called multiple times.
+	atomic.CompareAndSwapInt32(&s.code, 0, int32(code))
+	s.w.WriteHeader(code)
 }
 
 func (s *simpleSpy) Code() int {
-	if s.code == 0 && s.written {
-		return http.StatusOK
-	}
-	return s.code
+	return int(atomic.LoadInt32(&s.code))
 }
 
 type simpleWriteSpy struct {
