@@ -1,4 +1,8 @@
-// Package httpspy provides types for writing net/http middleware and tests.
+/*
+Package httpspy provides http.ResponseWriter implementations allowing inspection.
+
+The httpspy API is experimental. It may change without notice in the future.
+*/
 package httpspy
 
 import (
